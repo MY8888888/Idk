@@ -1,21 +1,31 @@
 name: build-android-wheels
-on: workflow_dispatch
+
+on:
+  workflow_dispatch:   # manual button only
+
 jobs:
   arm:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm   # native ARM64 runner
     steps:
       - uses: actions/checkout@v4
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Build wheels
+
+      - name: Install system build tools
         run: |
-          docker run --rm -v $PWD/wheels:/wheels \
-            --platform linux/arm64 python:3.12-slim bash -c "
-              pip install -U pip wheel && \
-              export BLIS_ARCH=generic && \
-              pip wheel spacy thinc blis cymem preshed murmurhash --wheel-dir /wheels"
-      - name: Upload artifact
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Build wheels via Docker
+        run: |
+          docker run --rm -v $PWD/wheels:/wheels python:3.12-slim bash -c "
+            pip install -U pip wheel &&
+            export BLIS_ARCH=generic &&
+            pip wheel spacy thinc blis cymem preshed murmurhash --wheel-dir /wheels"
+
+      - name: Pack artefact
+        run: cd wheels && tar czf spacy-android-aarch64.tar.gz *.whl
+
+      - name: Upload artefact
         uses: actions/upload-artifact@v4
         with:
           name: spacy-android-aarch64
-          path: wheels/*.whl
+          path: wheels/spacy-android-aarch64.tar.gz
