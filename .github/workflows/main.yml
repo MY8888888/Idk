@@ -24,7 +24,10 @@ jobs:
             pip wheel spacy thinc blis cymem preshed murmurhash --wheel-dir /wheels"
 
       - name: Pack artefact
-        run: cd wheels && tar czf spacy-android-aarch64.tar.gz *.whl
+        run: |
+          sudo chown -R $USER:$USER wheels   # fix any leftover root-owned files
+          tar czf spacy-android-aarch64.tar.gz -C wheels .
+          mv spacy-android-aarch64.tar.gz wheels/
 
       - name: Upload artefact
         uses: actions/upload-artifact@v4
