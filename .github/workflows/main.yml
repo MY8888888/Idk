@@ -16,15 +16,16 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 \
             -v $PWD/wheels:/wheels \
-            ghcr.io/termux/termux-docker:aarch64 bash -c '
+            termux/termux-docker:latest bash -lc '
               set -eux
-              apt-get update && apt-get install -y clang make cmake git binutils ninja pkg-config libffi openssl zlib libopenblas
-              python3 -m pip install -U pip setuptools wheel
+              pkg update && pkg upgrade -y
+              pkg install -y python clang make cmake git binutils ninja pkg-config libffi openssl zlib libopenblas
+              python -m pip install -U pip setuptools wheel
               export BLIS_ARCH=generic
-              python3 -m pip wheel --no-cache-dir --wheel-dir /wheels numpy || true
-              python3 -m pip wheel --no-cache-dir --wheel-dir /wheels pydantic_core pydantic || true
-              python3 -m pip wheel --no-cache-dir --wheel-dir /wheels blis cymem preshed murmurhash thinc srsly || true
-              python3 -m pip wheel --no-cache-dir --wheel-dir /wheels spacy
+              python -m pip wheel --no-cache-dir --wheel-dir /wheels numpy || true
+              python -m pip wheel --no-cache-dir --wheel-dir /wheels pydantic_core pydantic || true
+              python -m pip wheel --no-cache-dir --wheel-dir /wheels blis cymem preshed murmurhash thinc srsly || true
+              python -m pip wheel --no-cache-dir --wheel-dir /wheels spacy
               chown -R $(id -u):$(id -g) /wheels || true
           '
 
