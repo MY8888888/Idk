@@ -1,7 +1,7 @@
 name: build-android-wheels
 
 on:
-  workflow_dispatch:   # manual trigger only
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,7 +15,7 @@ jobs:
 
       - name: Build wheels inside Termux Docker
         run: |
-          docker run --rm -v $PWD/wheels:/wheels ghcr.io/termux/termux-docker bash -c "
+          docker run --rm -v $PWD/wheels:/wheels termux/termux-docker:latest bash -c "
             pkg update -y &&
             pkg install -y python clang build-essential binutils &&
             pip install -U pip setuptools wheel &&
