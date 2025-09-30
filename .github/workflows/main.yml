@@ -1,10 +1,10 @@
-name: build-android-wheels
+name: build-spacy-termux
 
 on:
   workflow_dispatch:   # run manually
 
 jobs:
-  termux:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -12,22 +12,25 @@ jobs:
       - name: Prepare wheels dir
         run: mkdir -p wheels
 
-      - name: Build Termux-compatible wheels inside Termux Docker
+      - name: Build wheels inside Termux Docker
         run: |
           docker run --rm -v $PWD/wheels:/wheels termux/termux-docker:latest bash -lc '
-            set -ex
+            set -eux
 
-            # Update Termux packages
+            # Use a reliable mirror
+            termux-change-repo -y || true
+
+            # Update & upgrade
             pkg update -y || true
             pkg upgrade -y || true
 
-            # Install essential build tools (ninja included so pip won’t compile its own)
-            pkg install -y python clang make cmake git binutils ninja pkg-config libffi openssl zlib openblas
+            # Install build tools & libs
+            pkg install -y python clang make cmake git binutils ninja pkg-config libffi openssl zlib libopenblas
 
-            # Upgrade pip and packaging tools
+            # Upgrade pip toolchain
             pip install -U pip setuptools wheel
 
-            # Build heavy deps first (optional)
+            # Pre-build common heavy deps (optional)
             pip wheel --no-cache-dir --wheel-dir /wheels numpy || true
             pip wheel --no-cache-dir --wheel-dir /wheels pydantic_core pydantic || true
             pip wheel --no-cache-dir --wheel-dir /wheels blis cymem preshed murmurhash thinc srsly || true
@@ -35,16 +38,16 @@ jobs:
             # Finally build spaCy
             pip wheel --no-cache-dir --wheel-dir /wheels spacy
 
-            # Fix ownership for GitHub runner
+            # Fix permissions for runner
             chown -R $(id -u):$(id -g) /wheels || true
           '
 
-      - name: Pack artefact
+      - name: Pack wheels
         run: |
           tar czf spacy-termux-wheels.tar.gz -C wheels .
           mv spacy-termux-wheels.tar.gz wheels/
 
-      - name: Upload artefact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: spacy-termux-wheels
