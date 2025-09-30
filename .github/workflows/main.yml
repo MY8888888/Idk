@@ -1,30 +1,55 @@
-name: build-android-wheels
+name: build-termux-spacy-wheels
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Use an ARM runner so produced wheels match aarch64
+    runs-on: ubuntu-24.04-arm
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Prepare wheel output dir
+      - name: Prepare output dir
         run: mkdir -p wheels
 
-      - name: Build wheels inside Termux Docker
+      - name: Build Termux-compatible wheels inside Termux Docker
+        # Uses Docker Hub termux image (public)
         run: |
-          docker run --rm -v $PWD/wheels:/wheels termux/termux-docker:latest bash -c "
-            pkg update -y &&
-            pkg install -y python clang build-essential binutils &&
-            pip install -U pip setuptools wheel &&
-            pip wheel spacy --no-cache-dir --wheel-dir /wheels
-          "
+          docker run --rm -v $PWD/wheels:/wheels termux/termux-docker:latest bash -lc '
+            set -ex
+
+            # Update Termux packages
+            pkg update -y || true
+            pkg upgrade -y || true
+
+            # Install essential build tools (ninja included so pip won't compile its own)
+            # (these package names are standard in Termux)
+            pkg install -y python clang make cmake git binutils ninja pkg-config libffi openssl zlib openblas
+
+            # Upgrade pip and packaging tools
+            pip install -U pip setuptools wheel
+
+            # Optional: install any python build-time helpers (avoid pip building `ninja`)
+            # Build wheelhouse: try to let pip resolve and build everything needed for spaCy
+            # First, build heavy deps that are usually needed (optional, but can avoid partial failures)
+            # You can adjust the list below (or remove and only run `pip wheel spacy`)
+            pip wheel --no-cache-dir --wheel-dir /wheels numpy || true
+            pip wheel --no-cache-dir --wheel-dir /wheels pydantic_core pydantic || true
+            pip wheel --no-cache-dir --wheel-dir /wheels blis cymem preshed murmurhash thinc srsly || true
+
+            # Finally build spaCy (pip will use wheels in /wheels for dependency resolution)
+            pip wheel --no-cache-dir --wheel-dir /wheels spacy
+
+            # Ensure ownership/permissions are ok when mounted back to host
+            chown -R $(id -u):$(id -g) /wheels || true
+          '
 
       - name: Pack wheels into tar.gz
         run: |
-          cd wheels
+          cd wheels || exit 0
           tar czf spacy-termux-aarch64.tar.gz *.whl
           cd ..
 
