@@ -1,7 +1,7 @@
-name: build-spacy-termux
+name: build-spacy-android-arm64
 
 on:
-  workflow_dispatch:   # run manually
+  workflow_dispatch:
 
 jobs:
   build:
@@ -9,33 +9,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare wheels dir
-        run: mkdir -p wheels
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      - name: Build wheels inside Termux Docker (ARM64)
+      - name: Install host tools
         run: |
-          docker run --rm --platform linux/arm64 \
-            -v $PWD/wheels:/wheels \
-            termux/termux-docker:latest bash -lc '
-              set -eux
-              pkg update && pkg upgrade -y
-              pkg install -y python clang make cmake git binutils ninja pkg-config libffi openssl zlib libopenblas
-              python -m pip install -U pip setuptools wheel
-              export BLIS_ARCH=generic
-              python -m pip wheel --no-cache-dir --wheel-dir /wheels numpy || true
-              python -m pip wheel --no-cache-dir --wheel-dir /wheels pydantic_core pydantic || true
-              python -m pip wheel --no-cache-dir --wheel-dir /wheels blis cymem preshed murmurhash thinc srsly || true
-              python -m pip wheel --no-cache-dir --wheel-dir /wheels spacy
-              chown -R $(id -u):$(id -g) /wheels || true
-          '
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build
 
-      - name: Pack wheels
+      - name: Download Android NDK
         run: |
-          tar czf spacy-termux-wheels.tar.gz -C wheels .
-          mv spacy-termux-wheels.tar.gz wheels/
+          wget -q https://dl.google.com/android/repository/android-ndk-r27-linux.zip
+          unzip -q android-ndk-r27-linux.zip
+          echo "$PWD/android-ndk-r27/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
-      - name: Upload artifact
+      - name: Build wheels for Android AArch64
+        env:
+          ANDROID_ABI: arm64-v8a
+          ANDROID_API: 21
+          CC:  aarch64-linux-android21-clang
+          CXX: aarch64-linux-android21-clang++
+          AR:  llvm-ar
+          STRIP: llvm-strip
+          BLIS_ARCH: generic
+        run: |
+          mkdir wheels
+          python -m pip install -U pip setuptools wheel
+          # 1. build the heavy-deps first (they need BLIS_ARCH)
+          python -m pip wheel --no-cache-dir --wheel-dir wheels numpy || true
+          python -m pip wheel --no-cache-dir --wheel-dir wheels blis cymem preshed murmurhash thinc srsly || true
+          python -m pip wheel --no-cache-dir --wheel-dir wheels pydantic_core pydantic || true
+          # 2. build spaCy itself
+          python -m pip wheel --no-cache-dir --wheel-dir wheels spacy
+
+      - name: Pack artefacts
+        run: |
+          tar czf spacy-android-arm64-wheels.tar.gz -C wheels .
+          mv spacy-android-arm64-wheels.tar.gz wheels/
+
+      - name: Upload artefact
         uses: actions/upload-artifact@v4
         with:
-          name: spacy-termux-wheels
-          path: wheels/spacy-termux-wheels.tar.gz
+          name: spacy-android-arm64-wheels
+          path: wheels/spacy-android-arm64-wheels.tar.gz
