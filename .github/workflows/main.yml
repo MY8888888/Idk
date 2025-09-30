@@ -1,35 +1,31 @@
 name: build-android-wheels
 
 on:
-  workflow_dispatch:   # manual trigger only
+  workflow_dispatch:
 
 jobs:
-  build:
+  android:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare wheel output dir
-        run: mkdir -p wheels
-
-      - name: Build wheels inside Termux Docker
+      - name: Build wheels for Android (Bionic)
         run: |
-          docker run --rm -v $PWD/wheels:/wheels ghcr.io/termux/termux-docker bash -c "
-            pkg update -y &&
-            pkg install -y python clang build-essential binutils &&
-            pip install -U pip setuptools wheel &&
-            pip wheel spacy --no-cache-dir --wheel-dir /wheels
-          "
+          docker run --rm -v $PWD/wheels:/wheels \
+            ghcr.io/termux/termux-docker:aarch64 bash -c "
+              apt-get update &&
+              apt-get install -y clang python3-dev make &&
+              python3 -m pip install -U pip wheel &&
+              export BLIS_ARCH=generic &&
+              python3 -m pip wheel spacy thinc blis cymem preshed murmurhash --wheel-dir /wheels"
 
-      - name: Pack wheels into tar.gz
+      - name: Pack artefact
         run: |
-          cd wheels
-          tar czf spacy-termux-aarch64.tar.gz *.whl
-          cd ..
+          sudo chown -R $USER:$USER wheels
+          tar czf spacy-android-aarch64.tar.gz -C wheels .
 
-      - name: Upload artifact
+      - name: Upload artefact
         uses: actions/upload-artifact@v4
         with:
-          name: spacy-termux-aarch64
-          path: wheels/spacy-termux-aarch64.tar.gz
+          name: spacy-android-aarch64
+          path: spacy-android-aarch64.tar.gz
